@@ -10,5 +10,5 @@ allow {
 # Allow regular users only for GET endpoints
 allow {
   input.user.role == "user"
-  input.method == "POST"
+  input.method == "GET"
 }
