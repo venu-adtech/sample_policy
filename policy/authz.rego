@@ -2,13 +2,9 @@ package authz
 
 default allow = false
 
-# Allow admin users to do anything
+# Allow if the user's group has the required permission
 allow {
-  input.user.role == "admin"
-}
-
-# Allow regular users only for GET endpoints
-allow {
-  input.user.role == "user"
-  input.method == "GET"
+    some group
+    input.user.groups[_] == group
+    data.groups[group][_] == input.permission
 }
