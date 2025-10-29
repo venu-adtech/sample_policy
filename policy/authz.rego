@@ -3,46 +3,48 @@ package authz
 default allow = false
 
 #
-# STEP 1: Resolve the canonical permission string "module.action"
+# Resolve the permission string.
+# Either from input.request.resource + input.request.action
+# or by matching path + method from data.modules.
 #
-resolve_permission(perm) {
+resolve_permission(perm) if {
   input.request.resource
   input.request.action
-  perm = sprintf("%s.%s", [input.request.resource, input.request.action])
+  perm := sprintf("%s.%s", [input.request.resource, input.request.action])
 }
 
-resolve_permission(perm) {
+resolve_permission(perm) if {
   some moduleName
   some endpoint
-  data.modules[moduleName]
-  endpoint = data.modules[moduleName].endpoints[_]
+
+  module := data.modules[moduleName]
+  endpoint := module.endpoints[_]
+
   startswith(input.request.path, endpoint.path)
-  contains(endpoint.methods, input.request.method)
-  perm = endpoint.permission
+  endpoint.methods[_] == input.request.method
+
+  perm := endpoint.permission
 }
 
 #
-# STEP 2: Check permissions granted through Roles → Groups → Permissions
+# Allow when:
+# 1) User has a role → role maps to groups
+# 2) Groups map to permissions
 #
-allow {
+allow if {
   resolve_permission(perm)
+  some role
+  some group
 
-  # user has role r
-  some r
-  input.user.roles[_] == r
-
-  # role grants groups
-  some g
-  data.roles[r][_] == g
-
-  # group contains permission perm
-  data.groups[g][_] == perm
+  role := input.user.role           # <- expected structure input.user.role = "admin"
+  data.roles[role][_] == group      # role → groups
+  data.groups[group][_] == perm     # group → permissions
 }
 
 #
-# STEP 3: Fallback: user has direct permissions (user-specific overrides)
+# Also allow for direct user → permissions
 #
-allow {
+allow if {
   resolve_permission(perm)
   input.user.permissions[_] == perm
 }
